@@ -26,6 +26,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -57,11 +58,13 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.android.compose.modifiers.thenIf
+import com.android.systemui.common.shared.model.ContentDescription
 import com.android.systemui.common.ui.compose.Icon
 import com.android.systemui.res.R
 import com.android.systemui.statusbar.featurepods.popups.ui.model.ChipIcon
 import com.android.systemui.statusbar.featurepods.popups.ui.model.ColorsModel
 import com.android.systemui.statusbar.featurepods.popups.ui.model.HoverBehavior
+import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
 import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipModel
 
 /**
@@ -83,12 +86,10 @@ fun StatusBarPopupChip(
     val chipShape =
         RoundedCornerShape(dimensionResource(id = R.dimen.ongoing_activity_chip_corner_radius))
     val colors = viewModel.colors
+    val isMediaChip = viewModel.chipId == PopupChipId.MediaControl
     val chipBackgroundColor =
         colors.chipBackground(isPopupShown = isPopupShown, colorScheme = MaterialTheme.colorScheme)
 
-    // Use a Box with `fillMaxHeight` to create a larger click surface for the chip. The visible
-    // height of the chip is determined by the height of the background of the Row below. The
-    // `indication` for Clicks is applied in the Row below as well.
     Box(
         contentAlignment = Alignment.Center,
         modifier =
@@ -106,14 +107,21 @@ fun StatusBarPopupChip(
                 },
     ) {
         val text = viewModel.chipText
-        // End padding should be symmetrical if the text is omitted.
-        val startPadding = 4.dp
+        val startPadding = if (isMediaChip) 6.dp else 4.dp
         val endPadding = if (text != null) 8.dp else startPadding
+        val chipHeight =
+            if (isMediaChip) {
+                dimensionResource(R.dimen.ongoing_appops_chip_height) + 2.dp
+            } else {
+                dimensionResource(R.dimen.ongoing_appops_chip_height)
+            }
+
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier =
-                Modifier.height(dimensionResource(R.dimen.ongoing_appops_chip_height))
+                Modifier.height(chipHeight)
+                    .defaultMinSize(minWidth = 0.dp)
                     .clip(chipShape)
                     .background(chipBackgroundColor)
                     .border(
@@ -140,12 +148,16 @@ fun StatusBarPopupChip(
                 colors = colors,
                 isPopupShown = isPopupShown,
                 isHovered = isHovered,
+                isMediaChip = isMediaChip,
             )
 
             if (text != null) {
                 val textStyle = MaterialTheme.typography.labelLarge
                 val textMeasurer = rememberTextMeasurer()
                 var textOverflow by remember { mutableStateOf(false) }
+                val maxTextWidth =
+                    dimensionResource(id = R.dimen.ongoing_activity_chip_max_text_width) +
+                        if (isMediaChip) 32.dp else 0.dp
 
                 Text(
                     text = text,
@@ -157,12 +169,7 @@ fun StatusBarPopupChip(
                             colorScheme = MaterialTheme.colorScheme,
                         ),
                     modifier =
-                        Modifier.widthIn(
-                                max =
-                                    dimensionResource(
-                                        id = R.dimen.ongoing_activity_chip_max_text_width
-                                    )
-                            )
+                        Modifier.widthIn(max = maxTextWidth)
                             .layout { measurables, constraints ->
                                 val placeable = measurables.measure(constraints)
                                 val intrinsicWidth =
@@ -191,6 +198,17 @@ fun StatusBarPopupChip(
                             ),
                 )
             }
+
+            if (isMediaChip) {
+                MusicVisualizerBars(
+                    isPlaying = isMediaPlaying(viewModel),
+                    color =
+                        colors.chipContent(
+                            isPopupShown = isPopupShown,
+                            colorScheme = MaterialTheme.colorScheme,
+                        ),
+                )
+            }
         }
     }
 }
@@ -201,6 +219,7 @@ private fun ChipIcons(
     colors: ColorsModel,
     isPopupShown: Boolean,
     isHovered: Boolean,
+    isMediaChip: Boolean,
 ) {
     val iconHoverBackgroundColor =
         colors.iconBackgroundOnHover(
@@ -213,11 +232,16 @@ private fun ChipIcons(
             isHovered = isHovered,
             colorScheme = MaterialTheme.colorScheme,
         )
-    for (chipIcon in chipIcons) {
+
+    chipIcons.forEachIndexed { index, chipIcon ->
+        val shouldUseArtworkStyle = isMediaChip && index == 0
         Icon(
             icon = chipIcon.icon,
             modifier =
-                Modifier.size(20.dp)
+                Modifier.size(if (shouldUseArtworkStyle) 18.dp else 20.dp)
+                    .thenIf(shouldUseArtworkStyle) {
+                        Modifier.clip(RoundedCornerShape(5.dp))
+                    }
                     .thenIf(chipIcon.onClick != null) {
                         Modifier.clickable(role = Role.Button, onClick = chipIcon.onClick!!)
                     }
@@ -225,7 +249,7 @@ private fun ChipIcons(
                         Modifier.background(color = iconHoverBackgroundColor, shape = CircleShape)
                             .padding(2.dp)
                     },
-            tint = iconColor,
+            tint = if (shouldUseArtworkStyle) Color.Unspecified else iconColor,
         )
     }
 }
@@ -245,4 +269,20 @@ private fun Modifier.overflowFadeOut(hasOverflow: () -> Boolean, fadeLength: Dp)
             if (hasOverflow()) drawRect(brush = gradient, blendMode = BlendMode.DstIn)
         }
     }
+}
+
+private fun isMediaPlaying(viewModel: PopupChipModel.Shown): Boolean {
+    val buttonIcon =
+        (viewModel.hoverBehavior as? HoverBehavior.Buttons)?.icons?.firstOrNull()?.icon
+            ?: return false
+    val description =
+        (buttonIcon.contentDescription as? ContentDescription.Loaded)?.description
+            ?.lowercase()
+            ?: return false
+    return description.contains("pause")
+}
+
+@Composable
+private fun MusicVisualizerBars(isPlaying: Boolean, color: Color) {
+    AudioReactiveBars(isPlaying = isPlaying, color = color, startPadding = 2.dp)
 }
