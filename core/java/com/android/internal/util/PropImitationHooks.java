@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2022 Paranoid Android
- *           (C) 2023 ArrowOS
- *           (C) 2023 The LibreMobileOS Foundation
+ * (C) 2023 ArrowOS
+ * (C) 2023 The LibreMobileOS Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -266,6 +266,29 @@ public class PropImitationHooks {
             }
         }
         return has;
+    }
+
+    /**
+     * Hides ROM-specific packages from 3rd party apps.
+     * Use prefixes to capture all LineageOS and PA components.
+     */
+    public static boolean shouldHidePackage(String packageName) {
+        if (TextUtils.isEmpty(packageName)) return false;
+
+        // Hide LineageOS, AOSP Sense (Paranoid), and ProtonAOSP specific packages
+        if (packageName.startsWith("org.lineageos.") ||
+            packageName.startsWith("co.aospa.") ||
+            packageName.equals("org.protonaosp.deviceconfig")) {
+
+            int callingUid = Binder.getCallingUid();
+            // Standard user apps have UIDs >= 10000.
+            // We hide only from them to ensure system services don't break.
+            if (callingUid >= Process.FIRST_APPLICATION_UID) {
+                dlog("Hiding ROM package: " + packageName + " from UID: " + callingUid);
+                return true;
+            }
+        }
+        return false;
     }
 
     public static void dlog(String msg) {

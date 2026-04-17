@@ -276,6 +276,9 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public PackageInfo getPackageInfoAsUser(String packageName, PackageInfoFlags flags, int userId)
             throws NameNotFoundException {
+        if (PropImitationHooks.shouldHidePackage(packageName)) {
+            throw new NameNotFoundException(packageName);
+        }
         PackageInfo pi =
                 getPackageInfoAsUserCached(
                         packageName,
@@ -547,6 +550,9 @@ public class ApplicationPackageManager extends PackageManager {
     @Override
     public ApplicationInfo getApplicationInfoAsUser(String packageName, ApplicationInfoFlags flags,
             int userId) throws NameNotFoundException {
+        if (PropImitationHooks.shouldHidePackage(packageName)) {
+            throw new NameNotFoundException(packageName);
+        }
         ApplicationInfo ai = getApplicationInfoAsUserCached(
                         packageName,
                         updateFlagsForApplication(flags.getValue(), userId),
@@ -1301,7 +1307,11 @@ public class ApplicationPackageManager extends PackageManager {
             if (parceledList == null) {
                 return Collections.emptyList();
             }
-            return parceledList.getList();
+
+            List<PackageInfo> list = new ArrayList<>(parceledList.getList());
+            list.removeIf(pi -> PropImitationHooks.shouldHidePackage(pi.packageName));
+            return list;
+
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
@@ -1402,7 +1412,11 @@ public class ApplicationPackageManager extends PackageManager {
             if (parceledList == null) {
                 return Collections.emptyList();
             }
-            return parceledList.getList();
+
+            List<ApplicationInfo> list = new ArrayList<>(parceledList.getList());
+            list.removeIf(ai -> PropImitationHooks.shouldHidePackage(ai.packageName));
+            return list;
+
         } catch (RemoteException e) {
             throw e.rethrowFromSystemServer();
         }
