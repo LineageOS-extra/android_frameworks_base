@@ -18,7 +18,6 @@ package com.android.systemui.statusbar.pipeline.shared.ui.composable
 
 import android.content.Context
 import android.graphics.Rect
-import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -84,8 +83,8 @@ import com.android.systemui.statusbar.core.RudimentaryBattery
 import com.android.systemui.statusbar.core.StatusBarConnectedDisplays
 import com.android.systemui.statusbar.core.StatusBarForDesktop
 import com.android.systemui.statusbar.events.domain.interactor.SystemStatusEventAnimationInteractor
-import com.android.systemui.statusbar.featurepods.popups.ui.model.PopupChipId
-import com.android.systemui.statusbar.featurepods.popups.ui.compose.StatusBarDynamicIslandContainer
+import com.android.systemui.statusbar.featurepods.popups.StatusBarPopupChips
+import com.android.systemui.statusbar.featurepods.popups.ui.compose.StatusBarPopupChipsContainer
 import com.android.systemui.statusbar.layout.ui.viewmodel.AppHandlesViewModel
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.ConnectedDisplaysStatusBarNotificationIconViewStore
 import com.android.systemui.statusbar.notification.icon.ui.viewbinder.NotificationIconContainerStatusBarViewBinder
@@ -224,13 +223,15 @@ fun StatusBarRoot(
         }
     var touchableExclusionRegionDisposableHandle: DisposableHandle? = null
 
-    with(mediaHost) {
-        expansion = MediaHostState.EXPANDED
-        expandedMatchesParentHeight = true
-        showsOnlyActiveMedia = true
-        falsingProtectionNeeded = false
-        disableScrolling = true
-        init(MediaHierarchyManager.LOCATION_STATUS_BAR_POPUP)
+    if (StatusBarPopupChips.isEnabled) {
+        with(mediaHost) {
+            expansion = MediaHostState.EXPANDED
+            expandedMatchesParentHeight = true
+            showsOnlyActiveMedia = true
+            falsingProtectionNeeded = false
+            disableScrolling = true
+            init(MediaHierarchyManager.LOCATION_STATUS_BAR_POPUP)
+        }
     }
 
     // Let the DesktopStatusBar compose all the UI if [useDesktopStatusBar] is true.
@@ -295,39 +296,43 @@ fun StatusBarRoot(
                         R.id.notificationIcons
                     )
 
-                // Add a composable container for `StatusBarPopupChip`s.
-                val centeredArea =
-                    phoneStatusBarView.requireViewById<AlphaOptimizedLinearLayout>(
-                        R.id.centered_area
-                    )
-
-                val composeView =
-                    ComposeView(context).apply {
-                        layoutParams =
-                            LinearLayout.LayoutParams(
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                                LinearLayout.LayoutParams.WRAP_CONTENT,
-                            ).apply { gravity = Gravity.CENTER }
-
-                        setViewCompositionStrategy(
-                            if (SceneContainerFlag.isEnabled) {
-                                ViewCompositionStrategy.Default
-                            } else {
-                                ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
-                            }
+                // Add a composable container for `StatusBarPopupChip`s
+                if (StatusBarPopupChips.isEnabled) {
+                    val endSideContent =
+                        phoneStatusBarView.requireViewById<AlphaOptimizedLinearLayout>(
+                            R.id.status_bar_end_side_content
                         )
 
-                        setContent {
-                            StatusBarDynamicIslandContainer(
-                                chips = statusBarViewModel.popupChips,
-                                onMediaControlPopupVisibilityChanged = { popupShowing ->
-                                    mediaHierarchyManager.isMediaControlPopupShowing =
-                                        popupShowing
-                                },
+                    val composeView =
+                        ComposeView(context).apply {
+                            layoutParams =
+                                LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                                )
+
+                            setViewCompositionStrategy(
+                                if (SceneContainerFlag.isEnabled) {
+                                    ViewCompositionStrategy.Default
+                                } else {
+                                    ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed
+                                }
                             )
+
+                            setContent {
+                                StatusBarPopupChipsContainer(
+                                    chips = statusBarViewModel.popupChips,
+                                    mediaViewModelFactory = mediaViewModelFactory,
+                                    mediaHost = mediaHost,
+                                    onMediaControlPopupVisibilityChanged = { popupShowing ->
+                                        mediaHierarchyManager.isMediaControlPopupShowing =
+                                            popupShowing
+                                    },
+                                )
+                            }
                         }
-                    }
-                centeredArea.addView(composeView)
+                    endSideContent.addView(composeView, 0)
+                }
 
                 // If the flag is enabled, create and add a compose section to the end
                 // of the system_icons container
@@ -481,9 +486,7 @@ private fun addStartSideComposable(
                     }
 
                 val chipsVisibilityModel = statusBarViewModel.ongoingActivityChips
-                val shouldHideLegacyScreenRecordChip =
-                    statusBarViewModel.popupChips.any { it.chipId == PopupChipId.ScreenRecord }
-                if (chipsVisibilityModel.areChipsAllowed && !shouldHideLegacyScreenRecordChip) {
+                if (chipsVisibilityModel.areChipsAllowed) {
                     OngoingActivityChips(
                         chips = chipsVisibilityModel.chips,
                         iconViewStore = iconViewStore,

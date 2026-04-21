@@ -106,7 +106,6 @@ constructor(
         val autoHide: Boolean,
         val denyListed: Boolean,
         val hideForHun: Boolean,
-        val dynamicIslandEnabled: Boolean,
         val position: Int,
         val visibilityModel: VisibilityModel,
     )
@@ -150,7 +149,6 @@ constructor(
                             autoHide = false,
                             denyListed = false,
                             hideForHun = false,
-                            dynamicIslandEnabled = context.contentResolver.readDynamicIslandEnabled(),
                             position = context.contentResolver.readClockPosition(),
                             visibilityModel = VisibilityModel(View.GONE, true),
                         )
@@ -164,10 +162,6 @@ constructor(
                     Settings.Secure.getUriFor(StatusBarIconController.ICON_HIDE_LIST)
                 val statusBarClockUri: Uri =
                     LineageSettings.System.getUriFor(LineageSettings.System.STATUS_BAR_CLOCK)
-                val dynamicIslandUri: Uri =
-                    LineageSettings.System.getUriFor(
-                        LineageSettings.System.STATUS_BAR_SHOW_DYNAMIC_ISLAND
-                    )
 
                 val taskStackListener =
                     object : TaskStackChangeListener {
@@ -218,19 +212,13 @@ constructor(
                                         current.copy(
                                             position = context.contentResolver.readClockPosition()
                                         )
-                                    dynamicIslandUri ->
-                                        current.copy(
-                                            dynamicIslandEnabled =
-                                                context.contentResolver.readDynamicIslandEnabled()
-                                        )
                                     else -> current
                                 }
                             }
                         }
                     }
 
-                val urisToObserve =
-                    listOf(clockAutoHideUri, iconHideListUri, statusBarClockUri, dynamicIslandUri)
+                val urisToObserve = listOf(clockAutoHideUri, iconHideListUri, statusBarClockUri)
                 urisToObserve.forEach { uri ->
                     context.contentResolver.registerContentObserver(
                         uri,
@@ -457,9 +445,7 @@ constructor(
                                     state.visibilityModel.visibility == View.VISIBLE &&
                                         !hunBlocksClock &&
                                         !state.autoHide &&
-                                        !state.denyListed &&
-                                        !(state.position == CLOCK_POSITION_CENTER &&
-                                            state.dynamicIslandEnabled)
+                                        !state.denyListed
                                 ) {
                                     state.visibilityModel
                                 } else {
@@ -587,15 +573,6 @@ constructor(
             CLOCK_POSITION_LEFT,
             UserHandle.USER_CURRENT,
         )
-    }
-
-    private fun ContentResolver.readDynamicIslandEnabled(): Boolean {
-        return LineageSettings.System.getIntForUser(
-            this,
-            LineageSettings.System.STATUS_BAR_SHOW_DYNAMIC_ISLAND,
-            0,
-            UserHandle.USER_CURRENT,
-        ) != 0
     }
 
     private fun shouldClockAutoHideForCurrentTask(): Boolean {
