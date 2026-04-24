@@ -146,10 +146,10 @@ public final class KeyboxChainGenerator {
             SecureRandom random = new SecureRandom();
 
             byte[] bytes1 = new byte[32];
-            byte[] bytes2 = new byte[32];
+            random.nextBytes(bytes1); // Keep verifiedBootKey random or static
 
-            random.nextBytes(bytes1);
-            random.nextBytes(bytes2);
+            // Extract the actual vbmeta digest from the ROM
+            byte[] bytes2 = KeyboxUtils.getVbmetaDigest();
 
             ASN1Encodable[] rootOfTrustEncodables = {new DEROctetString(bytes1), ASN1Boolean.TRUE,
                     new ASN1Enumerated(0), new DEROctetString(bytes2)};

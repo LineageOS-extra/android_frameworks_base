@@ -5,6 +5,9 @@
  */
 package com.android.internal.util;
 
+import android.os.SystemProperties;
+import java.security.SecureRandom;
+
 import android.security.keystore.KeyProperties;
 import android.system.keystore2.KeyEntryResponse;
 import android.system.keystore2.KeyMetadata;
@@ -47,6 +50,22 @@ public class KeyboxUtils {
                 .replaceAll("-----END [^-]+-----", "")
                 .replaceAll("\\s+", "");
         return Base64.getDecoder().decode(base64);
+    }
+
+    public static byte[] getVbmetaDigest() {
+        String digest = SystemProperties.get("ro.boot.vbmeta.digest");
+        // Ensure the digest exists and is a valid hex string
+        if (digest != null && digest.matches("^[0-9a-fA-F]+$")) {
+            byte[] bytes = new byte[digest.length() / 2];
+            for (int i = 0; i < bytes.length; i++) {
+                bytes[i] = (byte) Integer.parseInt(digest.substring(i * 2, i * 2 + 2), 16);
+            }
+            return bytes;
+        }
+        // Fallback to random bytes if the prop is empty or invalid
+        byte[] fallback = new byte[32];
+        new SecureRandom().nextBytes(fallback);
+        return fallback;
     }
 
     public static PrivateKey parsePrivateKey(String encodedKey, String algorithm) throws Exception {
